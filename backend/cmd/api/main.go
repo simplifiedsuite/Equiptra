@@ -116,6 +116,8 @@ func main() {
 				// tier as the asset-edit screen — see
 				// docs/equiptra-racks-cases-addendum.md.
 				r.Post("/{id}/swap-rack-member", api.SwapRackMember)
+				r.Post("/{id}/members", api.AddRackMember)
+				r.Delete("/{id}/members/{assetId}", api.RemoveRackMember)
 			})
 		})
 

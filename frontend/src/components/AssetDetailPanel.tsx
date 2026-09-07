@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import type { Asset, BookingAllocation, CaseContents, Product, ServiceRecord } from '../types'
 import { AssetTag } from './AssetTag'
 import { ProductThumbnail } from './ProductThumbnail'
+import { ScanButton } from './ScanButton'
 import { CloseIcon, UploadIcon } from './icons'
 
 const containerTypeLabel: Record<NonNullable<Asset['container_type']>, string> = {
@@ -53,6 +54,8 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [rackMembers, setRackMembers] = useState<Asset[] | null>(null)
   const [caseContents, setCaseContents] = useState<CaseContents[] | null>(null)
+  const [showAddToRack, setShowAddToRack] = useState(false)
+  const [rackError, setRackError] = useState<string | null>(null)
 
   async function handlePhotoSelected(file: File) {
     setUploading(true)
@@ -83,11 +86,22 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
     }
   }, [asset.id])
 
-  useEffect(() => {
+  function reloadRackMembers() {
     if (asset.container_type === 'rack') {
       api.get<Asset[]>(`/assets/${asset.id}/rack-members`).then(setRackMembers)
     }
-  }, [asset.id, asset.container_type])
+  }
+  useEffect(reloadRackMembers, [asset.id, asset.container_type])
+
+  async function removeFromRack(memberAssetId: number) {
+    setRackError(null)
+    try {
+      await api.delete(`/assets/${asset.id}/members/${memberAssetId}`)
+      reloadRackMembers()
+    } catch (err) {
+      setRackError(err instanceof ApiError ? err.message : 'Could not remove item')
+    }
+  }
 
   // A case has no contents between jobs — only fetch if there's a currently
   // active (allocated/checked_out) allocation for it to be packed against.
@@ -168,21 +182,46 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
 
         {asset.container_type === 'rack' && (
           <>
-            <div className="mb-2.5 mt-5.5 text-[11px] font-semibold uppercase tracking-[.06em] text-ink-soft">
-              Rack contents
+            <div className="mb-2.5 mt-5.5 flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-[.06em] text-ink-soft">Rack contents</span>
+              {user?.role === 'admin' && (
+                <button
+                  onClick={() => setShowAddToRack((s) => !s)}
+                  className="text-[11.5px] font-medium text-teal hover:opacity-80"
+                >
+                  {showAddToRack ? 'Close' : 'Add to rack'}
+                </button>
+              )}
             </div>
+            {showAddToRack && (
+              <AddToRackPanel
+                rackId={asset.id}
+                onAdded={reloadRackMembers}
+              />
+            )}
             {rackMembers === null ? (
               <div className="py-2 text-[12.5px] text-ink-soft">Loading…</div>
             ) : rackMembers.length ? (
               rackMembers.map((m) => (
                 <div key={m.id} className="flex items-center justify-between border-b border-border py-2.25 text-[13px]">
                   <span className="font-medium">{m.product_name}</span>
-                  <AssetTag number={m.asset_number} />
+                  <div className="flex items-center gap-2">
+                    <AssetTag number={m.asset_number} />
+                    {user?.role === 'admin' && (
+                      <button
+                        onClick={() => removeFromRack(m.id)}
+                        className="text-[11.5px] font-medium text-ink-soft hover:text-red"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))
             ) : (
               <div className="border-b border-border py-2.5 text-[12.5px] text-ink-soft">No items currently in this rack</div>
             )}
+            {rackError && <div className="border-b border-border py-2 text-[11.5px] font-medium text-red">{rackError}</div>}
           </>
         )}
 
@@ -257,6 +296,111 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
     <div className="flex items-center justify-between border-b border-border py-2.25 text-[13px]">
       <span className="text-ink-soft">{label}</span>
       <span className="font-medium">{value}</span>
+    </div>
+  )
+}
+
+// AddToRackPanel is the rack-centric counterpart to AllocationPanel's case
+// "Pack items" flow — but not booking-scoped (rack membership is permanent
+// kit structure, not per-job), and scan-first rather than search-first,
+// since building a rack physically means scanning items onto it one at a
+// time. Every successful scan or search-select adds immediately and resets
+// to a ready-to-scan-again state — no per-item confirm step, matching the
+// "scan, it's added, scan the next one" loop of actually building a rack by
+// hand. Reuses ScanButton (the same decoder Products.tsx's search uses)
+// rather than reimplementing barcode decoding here.
+function AddToRackPanel({ rackId, onAdded }: { rackId: number; onAdded: () => void }) {
+  const [search, setSearch] = useState('')
+  const [candidates, setCandidates] = useState<Asset[]>([])
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (search.trim().length < 2) {
+      setCandidates([])
+      return
+    }
+    const t = setTimeout(() => {
+      api.get<Asset[]>(`/assets?search=${encodeURIComponent(search.trim())}&status=active`).then(setCandidates)
+    }, 200)
+    return () => clearTimeout(t)
+  }, [search])
+
+  async function addAsset(assetId: number, label: string) {
+    setBusy(true)
+    setMessage(null)
+    try {
+      await api.post(`/assets/${rackId}/members`, { asset_id: assetId })
+      setMessage({ type: 'success', text: `Added ${label} — ready to scan the next one.` })
+      setSearch('')
+      setCandidates([])
+      onAdded()
+      searchInputRef.current?.focus()
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof ApiError ? err.message : 'Could not add item' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleScanned(text: string) {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const matches = await api.get<Asset[]>(`/assets?search=${encodeURIComponent(text)}&status=active`)
+      const exact = matches.find(
+        (a) => a.asset_number?.toLowerCase() === text.toLowerCase() || a.serial_number?.toLowerCase() === text.toLowerCase(),
+      )
+      if (!exact) {
+        setMessage({ type: 'error', text: `No active asset found matching "${text}" — ready to scan again.` })
+        return
+      }
+      await addAsset(exact.id, exact.asset_number ?? text)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mb-3 rounded-control border border-border bg-off-white p-2.5">
+      <div className="mb-2 flex gap-2">
+        <input
+          ref={searchInputRef}
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value)
+            setMessage(null)
+          }}
+          placeholder="Search by product, asset number, or serial…"
+          className="min-w-0 flex-1 rounded-control border border-border px-3 py-2 text-[12.5px] outline-none focus:border-teal"
+        />
+        <ScanButton
+          onScanned={handleScanned}
+          onError={(text) => setMessage({ type: 'error', text })}
+          label="Scan"
+          className="shrink-0 flex items-center gap-1.5 rounded-control bg-ink px-3 py-2 text-[12px] font-medium text-white hover:opacity-88 disabled:opacity-60"
+        />
+      </div>
+      {candidates.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {candidates
+            .filter((c) => c.id !== rackId)
+            .map((c) => (
+              <button
+                key={c.id}
+                disabled={busy}
+                onClick={() => addAsset(c.id, c.asset_number ?? c.product_name ?? 'item')}
+                className="rounded-control border border-border px-2.5 py-1.5 text-[12px] font-medium text-ink-soft hover:border-border-strong disabled:opacity-50"
+              >
+                {c.product_name} · {c.is_bulk ? `bulk (${c.quantity} held)` : c.asset_number}
+              </button>
+            ))}
+        </div>
+      )}
+      {message && (
+        <div className={`text-[11.5px] font-medium ${message.type === 'error' ? 'text-red' : 'text-teal'}`}>{message.text}</div>
+      )}
     </div>
   )
 }

@@ -342,6 +342,93 @@ func (a *API) SwapRackMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "swapped"})
 }
 
+type addRackMemberRequest struct {
+	AssetID int64 `json:"asset_id"`
+}
+
+// AddRackMember sets home_rack_id on an asset to this rack — the write side
+// of ListRackMembers's read-only display, built for the scan-to-add
+// workflow on the rack's own detail panel: building a rack physically means
+// scanning items onto it one at a time, not opening each item's own edit
+// screen. Admin-only (see cmd/api/main.go), same tier as SwapRackMember and
+// the asset-edit screen — rack membership is permanent kit structure.
+// Idempotent: re-adding an asset already on this rack is a harmless no-op,
+// so a duplicate scan doesn't need special handling.
+func (a *API) AddRackMember(w http.ResponseWriter, r *http.Request) {
+	rackID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var req addRackMemberRequest
+	if err := readJSON(r, &req); err != nil || req.AssetID == 0 {
+		writeError(w, http.StatusBadRequest, "asset_id is required")
+		return
+	}
+	if req.AssetID == rackID {
+		writeError(w, http.StatusBadRequest, "a rack cannot contain itself")
+		return
+	}
+
+	var rackContainerType *models.ContainerType
+	if err := a.DB.QueryRow(r.Context(), `SELECT container_type FROM assets WHERE id = $1`, rackID).Scan(&rackContainerType); errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "rack not found")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if rackContainerType == nil || *rackContainerType != models.ContainerTypeRack {
+		writeError(w, http.StatusBadRequest, "asset is not a rack")
+		return
+	}
+
+	tag, err := a.DB.Exec(r.Context(), `UPDATE assets SET home_rack_id = $1, updated_at = now() WHERE id = $2`, rackID, req.AssetID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "add failed: "+err.Error())
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeError(w, http.StatusNotFound, "asset not found")
+		return
+	}
+
+	asset, err := scanAsset(a.DB.QueryRow(r.Context(), `
+		SELECT `+assetSelectCols+` FROM assets a JOIN products p ON p.id = a.product_id `+assetSelectJoins+` WHERE a.id = $1`, req.AssetID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "fetch after add failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, asset)
+}
+
+// RemoveRackMember clears home_rack_id — the plain removal direction
+// paired with AddRackMember. Only succeeds if the asset is currently a
+// member of this specific rack, same safety guard as SwapRackMember's old
+// side.
+func (a *API) RemoveRackMember(w http.ResponseWriter, r *http.Request) {
+	rackID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	assetID, err := strconv.ParseInt(chi.URLParam(r, "assetId"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid asset id")
+		return
+	}
+	tag, err := a.DB.Exec(r.Context(), `UPDATE assets SET home_rack_id = NULL, updated_at = now() WHERE id = $1 AND home_rack_id = $2`, assetID, rackID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "remove failed")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeError(w, http.StatusNotFound, "asset is not currently a member of this rack")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- Case contents ---
 
 const caseContentsSelectCols = `
