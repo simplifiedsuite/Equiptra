@@ -18,7 +18,7 @@ export function ForcedPasswordChange() {
             <span className="h-[5px] w-[16px] rounded-full bg-teal" />
             <span className="h-[5px] w-[10px] rounded-full bg-teal" />
           </div>
-          <div className="text-[17px] font-bold tracking-[.04em] uppercase">Equiptra</div>
+          <div className="text-[17px] font-bold tracking-[.04em] uppercase">Equipment</div>
         </div>
         <p className="mb-1 text-[13.5px] font-medium">Set a new password</p>
         <p className="mb-6 text-[12px] text-ink-soft">

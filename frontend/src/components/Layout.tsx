@@ -31,7 +31,7 @@ export function Layout() {
               <span className="h-[5px] w-[16px] rounded-full bg-teal" />
               <span className="h-[5px] w-[10px] rounded-full bg-teal" />
             </div>
-            <div className="text-[16px] font-bold tracking-[.04em] uppercase">Equiptra</div>
+            <div className="text-[16px] font-bold tracking-[.04em] uppercase">Equipment</div>
           </div>
           <span className="text-[11px] text-ink-soft">Equipment management, simplified.</span>
         </a>
