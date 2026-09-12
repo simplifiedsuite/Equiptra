@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"equiptra/internal/monday"
 	"equiptra/internal/storage"
 )
 
@@ -19,9 +18,6 @@ type API struct {
 	// (SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY unset) — see
 	// storage.NewSupabaseClient.
 	Supabase *storage.SupabaseClient
-	// Monday is nil when the Monday.com project-lookup feature is disabled
-	// (MONDAY_API_TOKEN unset) — see monday.NewClient.
-	Monday *monday.Client
 }
 
 // dbExecutor is satisfied by both *pgxpool.Pool and pgx.Tx — lets shared

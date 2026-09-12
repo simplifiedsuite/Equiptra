@@ -34,8 +34,16 @@ type CorePerson struct {
 
 var coreHTTPClient = &http.Client{Timeout: 5 * time.Second}
 
-func coreAPIURL() string {
+// CoreAPIURL is exported so other server-to-server callers into Core (e.g.
+// the Monday.com project-lookup proxy) share the same CORE_API_URL config
+// this file already reads for the SSO bridge, rather than each reading the
+// env var independently.
+func CoreAPIURL() string {
 	return os.Getenv("CORE_API_URL")
+}
+
+func coreAPIURL() string {
+	return CoreAPIURL()
 }
 
 // FetchCorePerson calls Core's POST /api/whoami with the raw suite_session
