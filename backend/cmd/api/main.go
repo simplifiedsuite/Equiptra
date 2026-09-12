@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -44,12 +45,18 @@ func main() {
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.Timeout(30 * time.Second))
 
-	frontendOrigin := os.Getenv("FRONTEND_ORIGIN")
-	if frontendOrigin == "" {
-		frontendOrigin = "http://localhost:5173"
+	// FRONTEND_ORIGIN accepts a comma-separated list (mirroring Ralto's own
+	// FRONTEND_ORIGINS) now that Equiptra is reachable from two origins at
+	// once: its original equiptra-smoky.vercel.app URL, and the new
+	// equipment.simplifiedsuite.io custom domain the Core SSO bridge
+	// requires (the suite_session cookie is scoped to .simplifiedsuite.io
+	// and is never sent to a vercel.app origin).
+	frontendOrigins := splitOrigins(os.Getenv("FRONTEND_ORIGIN"))
+	if len(frontendOrigins) == 0 {
+		frontendOrigins = []string{"http://localhost:5173"}
 	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{frontendOrigin},
+		AllowedOrigins:   frontendOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type"},
 		AllowCredentials: true,
@@ -212,4 +219,18 @@ func main() {
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func splitOrigins(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			origins = append(origins, trimmed)
+		}
+	}
+	return origins
 }
