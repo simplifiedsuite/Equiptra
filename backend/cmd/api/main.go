@@ -55,6 +55,11 @@ func main() {
 		AllowCredentials: true,
 	}))
 
+	// Stage 2 SSO handoff (additive — see BridgeCoreSession's own comment).
+	// A no-op for every request unless CORE_API_URL is set and the request
+	// carries a suite_session cookie with no equiptra_session yet.
+	r.Use(api.BridgeCoreSession)
+
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
