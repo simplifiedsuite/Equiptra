@@ -17,7 +17,14 @@ export function Layout() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-border bg-surface p-2.5 md:w-[200px] md:flex-col md:overflow-visible md:border-b-0 md:border-r md:py-5">
-        <div className="mb-3 hidden border-b border-border px-5 pb-4.5 md:block">
+        {/* Real navigation (not a client-side route) back to Simplified
+            Suite's own Landing screen — matches Crewing's wordmark, which
+            links out the same way via window.location. */}
+        <a
+          href="https://simplifiedsuite.io"
+          title="Open Simplified Suite"
+          className="mb-3 hidden border-b border-border px-5 pb-4.5 text-inherit no-underline md:block"
+        >
           <div className="mb-2 flex items-center gap-2.5">
             <div className="flex flex-col gap-[3px]">
               <span className="h-[5px] w-[22px] rounded-full bg-teal" />
@@ -27,7 +34,7 @@ export function Layout() {
             <div className="text-[16px] font-bold tracking-[.04em] uppercase">Equiptra</div>
           </div>
           <span className="text-[11px] text-ink-soft">Equipment management, simplified.</span>
-        </div>
+        </a>
 
         {items.map(({ to, label, icon: ItemIcon }) => (
           <NavLink
