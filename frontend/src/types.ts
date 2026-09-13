@@ -70,6 +70,11 @@ export interface Project {
   id: number
   name: string
   client?: string
+  // core_client_id links this project to Core's own Client entity — set
+  // once `client`'s name has been matched/confirmed or created via the
+  // Job Fetch-from-Monday flow (Stage B). No local clients table here
+  // (unlike Crewing's Job), so the link lives directly on Project.
+  core_client_id?: string
   start_date: string
   end_date: string
   status: ProjectStatus
@@ -78,6 +83,11 @@ export interface Project {
   order_number?: string
   delivery_address?: string
   notes?: string
+  // shared_contract_id/name: an optional, direct link to Core's Contract,
+  // plus a cached label from when it was last linked (not live-refreshed).
+  // Mirrors Crewing Job's own fields exactly.
+  shared_contract_id?: string
+  shared_contract_name?: string
   created_at: string
   updated_at: string
 }
@@ -89,6 +99,27 @@ export interface MondayProjectLookup {
   end_date?: string
   client_reference?: string
   delivery_address?: string
+}
+
+// The subset of Core's own Client shape the Monday-fetch flow reads —
+// fetched live from Core (GET /core-clients, proxied), never cached, per
+// docs/simplified_suite_core_v0_6.md §5a's "pickers always go live" rule.
+export interface CoreClient {
+  id: string
+  name: string
+  website?: string
+  brand_color_hex?: string
+}
+
+// The subset of Core's own Contract shape the "Link to a Contract?" picker
+// reads — also fetched live (GET /core-contracts?client_id=...).
+export interface CoreContract {
+  id: string
+  client_id: string
+  client_name: string
+  name: string
+  date_start?: string
+  date_end?: string
 }
 
 export interface ProjectStatusConflictAsset {

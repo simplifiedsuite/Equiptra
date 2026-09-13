@@ -132,9 +132,15 @@ type Asset struct {
 }
 
 type Project struct {
-	ID              int64         `json:"id"`
-	Name            string        `json:"name"`
-	Client          *string       `json:"client,omitempty"`
+	ID     int64   `json:"id"`
+	Name   string  `json:"name"`
+	Client *string `json:"client,omitempty"`
+	// CoreClientID links this project to Core's own Client entity — set
+	// once the free-text Client name above has been matched/confirmed or
+	// created via the Job Fetch-from-Monday flow (Stage B). No local
+	// clients table here (unlike Crewing's Job): Client has only ever been
+	// a bare display string, so the link goes straight on Project itself.
+	CoreClientID    *string       `json:"core_client_id,omitempty"`
 	StartDate       time.Time     `json:"start_date"`
 	EndDate         time.Time     `json:"end_date"`
 	Status          ProjectStatus `json:"status"`
@@ -143,8 +149,14 @@ type Project struct {
 	OrderNumber     *string       `json:"order_number,omitempty"`
 	DeliveryAddress *string       `json:"delivery_address,omitempty"`
 	Notes           *string       `json:"notes,omitempty"`
-	CreatedAt       time.Time     `json:"created_at"`
-	UpdatedAt       time.Time     `json:"updated_at"`
+	// SharedContractID/Name mirror Crewing Job's own fields exactly — an
+	// optional, direct link to Core's Contract, plus a cached label from
+	// when it was last linked (not live-refreshed - see
+	// docs/simplified_suite_core_v0_6.md §5b).
+	SharedContractID   *string   `json:"shared_contract_id,omitempty"`
+	SharedContractName *string   `json:"shared_contract_name,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // BookingRequest is the product-level ask against a project — "we need 2x

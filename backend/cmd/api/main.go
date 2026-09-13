@@ -148,6 +148,13 @@ func main() {
 			r.Get("/project-lookup", api.MondayProjectLookup)
 		})
 
+		// Job Fetch-from-Monday, Stage B — same pattern as Crewing's own
+		// Stage A, proxying straight to Core, which owns the real Client/
+		// Contract records. See core_proxy.go.
+		r.Get("/core-clients", api.ListCoreClients)
+		r.Post("/core-clients", api.CreateCoreClient)
+		r.Get("/core-contracts", api.ListCoreContracts)
+
 		r.Route("/booking-requests", func(r chi.Router) {
 			r.Get("/", api.ListBookingRequests)
 			r.Post("/", api.CreateBookingRequest)
