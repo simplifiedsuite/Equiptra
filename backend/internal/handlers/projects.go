@@ -14,13 +14,13 @@ import (
 )
 
 const projectSelectCols = `id, name, client, core_client_id, start_date, end_date, status, carnet_required,
-	       client_reference, order_number, delivery_address, notes, shared_contract_id, shared_contract_name, created_at, updated_at`
+	       client_reference, order_number, delivery_address, notes, shared_contract_id, shared_contract_name, shared_job_id, created_at, updated_at`
 
 func scanProject(row pgx.Row) (models.Project, error) {
 	var p models.Project
 	err := row.Scan(&p.ID, &p.Name, &p.Client, &p.CoreClientID, &p.StartDate, &p.EndDate, &p.Status,
 		&p.CarnetRequired, &p.ClientReference, &p.OrderNumber, &p.DeliveryAddress, &p.Notes,
-		&p.SharedContractID, &p.SharedContractName,
+		&p.SharedContractID, &p.SharedContractName, &p.SharedJobID,
 		&p.CreatedAt, &p.UpdatedAt)
 	return p, err
 }
@@ -81,6 +81,7 @@ type projectWriteRequest struct {
 	Notes              *string              `json:"notes"`
 	SharedContractID   *string              `json:"shared_contract_id"`
 	SharedContractName *string              `json:"shared_contract_name"`
+	SharedJobID        *string              `json:"shared_job_id"`
 }
 
 func (req projectWriteRequest) validate() error {
@@ -115,11 +116,11 @@ func (a *API) CreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p, err := scanProject(a.DB.QueryRow(r.Context(), `
-		INSERT INTO projects (name, client, core_client_id, start_date, end_date, status, carnet_required, client_reference, order_number, delivery_address, notes, shared_contract_id, shared_contract_name)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		INSERT INTO projects (name, client, core_client_id, start_date, end_date, status, carnet_required, client_reference, order_number, delivery_address, notes, shared_contract_id, shared_contract_name, shared_job_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING `+projectSelectCols,
 		req.Name, req.Client, req.CoreClientID, req.StartDate, req.EndDate, req.statusOrDefault(), req.CarnetRequired,
-		req.ClientReference, req.OrderNumber, req.DeliveryAddress, req.Notes, req.SharedContractID, req.SharedContractName,
+		req.ClientReference, req.OrderNumber, req.DeliveryAddress, req.Notes, req.SharedContractID, req.SharedContractName, req.SharedJobID,
 	))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "insert failed: "+err.Error())
@@ -151,12 +152,12 @@ func (a *API) UpdateProject(w http.ResponseWriter, r *http.Request) {
 	p, err := scanProject(a.DB.QueryRow(r.Context(), `
 		UPDATE projects SET name=$1, client=$2, core_client_id=$3, start_date=$4, end_date=$5,
 		       carnet_required=$6, client_reference=$7, order_number=$8, delivery_address=$9, notes=$10,
-		       shared_contract_id=$11, shared_contract_name=$12, updated_at=now()
-		WHERE id=$13
+		       shared_contract_id=$11, shared_contract_name=$12, shared_job_id=$13, updated_at=now()
+		WHERE id=$14
 		RETURNING `+projectSelectCols,
 		req.Name, req.Client, req.CoreClientID, req.StartDate, req.EndDate, req.CarnetRequired,
 		req.ClientReference, req.OrderNumber, req.DeliveryAddress, req.Notes,
-		req.SharedContractID, req.SharedContractName, id,
+		req.SharedContractID, req.SharedContractName, req.SharedJobID, id,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "project not found")

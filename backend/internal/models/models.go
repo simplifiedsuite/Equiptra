@@ -153,10 +153,15 @@ type Project struct {
 	// optional, direct link to Core's Contract, plus a cached label from
 	// when it was last linked (not live-refreshed - see
 	// docs/simplified_suite_core_v0_6.md §5b).
-	SharedContractID   *string   `json:"shared_contract_id,omitempty"`
-	SharedContractName *string   `json:"shared_contract_name,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	SharedContractID   *string `json:"shared_contract_id,omitempty"`
+	SharedContractName *string `json:"shared_contract_name,omitempty"`
+	// SharedJobID links this project to Core's own shared Job entity — set
+	// when created from a Monday fetch, whether that fetch found an
+	// existing Core Job or created a new one. See migrations/0008
+	// (shared_job_link) and Core's own migrations/0008_jobs.sql.
+	SharedJobID *string   `json:"shared_job_id,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // BookingRequest is the product-level ask against a project — "we need 2x

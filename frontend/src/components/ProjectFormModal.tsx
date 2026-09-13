@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../lib/api'
-import type { CoreClient, CoreContract, MondayProjectLookup, Project } from '../types'
+import type { CoreClient, CoreContract, CoreJob, MondayProjectLookup, Project } from '../types'
 import { CloseIcon } from './icons'
 
 function toDateInput(iso: string) {
@@ -232,6 +232,69 @@ function ContractPicker({
   )
 }
 
+// Shared Core Job entity — one Monday order-number fetch, visible from
+// every product (see Core's own migrations/0008_jobs.sql). Shown instead
+// of ClientMatchPanel when Core already has this order number: one
+// explicit confirm step ("Use this job") before anything is applied —
+// order_number matching itself needs no fuzzy logic, but silently
+// adopting a found record without showing it first would break the same
+// "never auto-apply" rule the Client match already established.
+// "Re-check Monday for updates" is the one deliberately separate action
+// that actually re-pulls Monday — the default path here never calls
+// Monday at all.
+function FoundJobPanel({ job, onUse }: { job: CoreJob; onUse: (job: CoreJob) => void }) {
+  const [current, setCurrent] = useState(job)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [used, setUsed] = useState(false)
+
+  async function refresh() {
+    setRefreshing(true)
+    setRefreshError(null)
+    try {
+      const updated = await api.post<CoreJob>(`/core-jobs/${current.id}/refresh`)
+      setCurrent(updated)
+    } catch {
+      setRefreshError('Could not reach Monday to re-check this job.')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const dateRange = current.date_start ? `${current.date_start}${current.date_end && current.date_end !== current.date_start ? ` – ${current.date_end}` : ''}` : undefined
+
+  return (
+    <div className="flex flex-col gap-2 rounded-control border border-border p-3">
+      <div className="text-[12.5px] font-semibold">Already in Simplified Suite</div>
+      <div className="text-[12.5px]">
+        <strong>{current.name}</strong> — {current.client_name}
+        {current.contract_name ? ` · ${current.contract_name}` : ''}
+        {dateRange ? ` · ${dateRange}` : ''}
+      </div>
+      {refreshError && <div className="text-[12px] text-red">{refreshError}</div>}
+      {used ? (
+        <div className="text-[12.5px] text-teal">✓ Applied</div>
+      ) : (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setUsed(true)
+              onUse(current)
+            }}
+            className={primaryButtonClass}
+          >
+            Use this job
+          </button>
+          <button type="button" onClick={refresh} disabled={refreshing} className={ghostButtonClass}>
+            {refreshing ? 'Checking…' : 'Re-check Monday for updates'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function ProjectFormModal({
   project,
   onClose,
@@ -257,43 +320,84 @@ export function ProjectFormModal({
   const [mondayError, setMondayError] = useState<string | null>(null)
   const [mondayFetching, setMondayFetching] = useState(false)
   const [mondayClientName, setMondayClientName] = useState<string | undefined>(undefined)
+  const [mondayDeliveryAddress, setMondayDeliveryAddress] = useState<string | undefined>(undefined)
   const [sharedContractId, setSharedContractId] = useState(project?.shared_contract_id)
   const [sharedContractName, setSharedContractName] = useState(project?.shared_contract_name)
+  // sharedJobId links to Core's shared Job entity — set either by finding
+  // an existing one (FoundJobPanel's "Use this job") or, on submit, by
+  // creating a new one after a fresh Monday fetch + Client confirm.
+  const [sharedJobId, setSharedJobId] = useState(project?.shared_job_id)
+  const [foundCoreJob, setFoundCoreJob] = useState<CoreJob | undefined>(undefined)
 
-  // Reusable on edit too, same as Crewing's Stage A — re-fetching just
-  // re-applies Monday's current values and resets the Client/Contract
-  // match state, same "never silently keep a stale link" rule as create.
+  // Reusable on edit too, same as Crewing's Stage A. Checks Core first —
+  // order_number is a real, exact, unique identifier (Monday's own item
+  // name), unlike Client name matching, so this needs no fuzzy logic or
+  // confirmation to match. Found: show what was found (FoundJobPanel) and
+  // wait for an explicit "Use this job". Not found: fall through to the
+  // existing Monday-fetch + Client match/Contract-picker flow, unchanged.
   async function fetchFromMonday() {
-    if (!orderNumber.trim()) {
+    const trimmed = orderNumber.trim()
+    if (!trimmed) {
       setMondayError('Enter an order number first.')
       return
     }
     setMondayFetching(true)
     setMondayError(null)
+    setFoundCoreJob(undefined)
+    setMondayClientName(undefined)
+    setMondayDeliveryAddress(undefined)
+    // A fresh fetch always needs a fresh match — never silently keep a
+    // previous fetch's (or the existing project's) Client/Contract/Job
+    // link against new data.
+    setCoreClientId(undefined)
+    setSharedContractId(undefined)
+    setSharedContractName(undefined)
+    setSharedJobId(undefined)
     try {
-      const result = await api.get<MondayProjectLookup>(`/monday/project-lookup?order_number=${encodeURIComponent(orderNumber.trim())}`)
-      setName(result.name)
-      if (result.start_date) setStartDate(result.start_date)
-      if (result.end_date) setEndDate(result.end_date)
-      if (result.client_reference) setClientReference(result.client_reference)
-      if (result.delivery_address) setDeliveryAddress(result.delivery_address)
-      // A fresh fetch always needs a fresh match — never silently keep a
-      // previous fetch's (or the existing project's) Client/Contract link
-      // against new data.
-      setCoreClientId(undefined)
-      setSharedContractId(undefined)
-      setSharedContractName(undefined)
-      if (result.client) {
-        setClient(result.client)
-        setMondayClientName(result.client)
-      } else {
-        setMondayClientName(undefined)
+      const existing = await api.get<CoreJob>(`/core-jobs?order_number=${encodeURIComponent(trimmed)}`)
+      setFoundCoreJob(existing)
+    } catch {
+      // 404 (no shared Job yet) or Core's lookup itself failing
+      // (unreachable, etc.) both fall through to Monday directly the same
+      // way — don't block on Core being reachable, same graceful-
+      // degradation rule as everywhere else this flow reads from Core.
+      try {
+        const result = await api.get<MondayProjectLookup>(`/monday/project-lookup?order_number=${encodeURIComponent(trimmed)}`)
+        setName(result.name)
+        if (result.start_date) setStartDate(result.start_date)
+        if (result.end_date) setEndDate(result.end_date)
+        if (result.client_reference) setClientReference(result.client_reference)
+        if (result.delivery_address) {
+          setDeliveryAddress(result.delivery_address)
+          setMondayDeliveryAddress(result.delivery_address)
+        }
+        if (result.client) {
+          setClient(result.client)
+          setMondayClientName(result.client)
+        }
+      } catch (mondayErr) {
+        setMondayError(mondayErr instanceof ApiError ? mondayErr.message : 'Could not reach Monday — enter project details manually')
       }
-    } catch (err) {
-      setMondayError(err instanceof ApiError ? err.message : 'Could not reach Monday — enter project details manually')
     } finally {
       setMondayFetching(false)
     }
+  }
+
+  // "Use this job" — the one explicit confirm step for an already-found
+  // shared Job. No separate local mirror needed here (unlike Crewing):
+  // Equipment's Client is just a display string + core_client_id, so the
+  // Core Client's own id/name apply directly.
+  function useFoundJob(job: CoreJob) {
+    setName(job.name)
+    if (job.date_start) setStartDate(job.date_start)
+    if (job.date_end) setEndDate(job.date_end)
+    if (job.client_reference) setClientReference(job.client_reference)
+    if (job.delivery_address) setDeliveryAddress(job.delivery_address)
+    setClient(job.client_name)
+    setCoreClientId(job.client_id)
+    setSharedContractId(job.contract_id)
+    setSharedContractName(job.contract_name)
+    setSharedJobId(job.id)
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -301,6 +405,33 @@ export function ProjectFormModal({
     setError(null)
     setSubmitting(true)
     try {
+      // If this came from a fresh Monday fetch that found no existing
+      // shared Job (coreClientId set via ClientMatchPanel, not via "Use
+      // this job"), create the shared Core Job now, right before saving
+      // locally — so the next fetch of this order number, from either
+      // product, finds it immediately. Non-fatal if it fails (Core
+      // unreachable, or a rare race with another fetch of the exact same
+      // brand-new order number): still save the local project either way.
+      let finalSharedJobId = sharedJobId
+      const trimmedOrderNumber = orderNumber.trim()
+      if (!finalSharedJobId && coreClientId && trimmedOrderNumber) {
+        try {
+          const created = await api.post<CoreJob>('/core-jobs', {
+            order_number: trimmedOrderNumber,
+            name,
+            client_id: coreClientId,
+            contract_id: sharedContractId,
+            date_start: startDate,
+            date_end: endDate,
+            client_reference: clientReference || undefined,
+            delivery_address: mondayDeliveryAddress ?? deliveryAddress ?? undefined,
+          })
+          finalSharedJobId = created.id
+        } catch {
+          // See comment above — proceed without a shared Job link.
+        }
+      }
+
       const body = {
         name,
         client: client || null,
@@ -314,6 +445,7 @@ export function ProjectFormModal({
         notes: notes || null,
         shared_contract_id: sharedContractId ?? null,
         shared_contract_name: sharedContractId ? (sharedContractName ?? null) : null,
+        shared_job_id: finalSharedJobId ?? null,
       }
       if (isEdit) {
         await api.put(`/projects/${project.id}`, body)
@@ -373,6 +505,8 @@ export function ProjectFormModal({
             </div>
           )}
 
+          {foundCoreJob && <FoundJobPanel key={foundCoreJob.id} job={foundCoreJob} onUse={useFoundJob} />}
+
           {mondayClientName && (
             <ClientMatchPanel
               key={mondayClientName}
@@ -391,9 +525,13 @@ export function ProjectFormModal({
               onChange={(e) => {
                 setClient(e.target.value)
                 // Typing over the client name manually invalidates whatever
-                // Core Client it was matched to — never keep a stale link
-                // silently pointing at a name that's since been edited.
+                // Core Client/Contract/Job it was resolved from — never
+                // keep a stale link silently pointing at a name that's
+                // since been edited.
                 setCoreClientId(undefined)
+                setSharedContractId(undefined)
+                setSharedContractName(undefined)
+                setSharedJobId(undefined)
               }}
               className={fieldClass}
             />
