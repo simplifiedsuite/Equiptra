@@ -15,6 +15,7 @@ import (
 	"equiptra/internal/db"
 	"equiptra/internal/handlers"
 	"equiptra/internal/middleware"
+	"equiptra/internal/notify"
 	"equiptra/internal/storage"
 )
 
@@ -32,7 +33,12 @@ func main() {
 		log.Printf("SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY not set — product photo uploads are disabled")
 	}
 
-	api := &handlers.API{DB: pool, Supabase: supabaseClient}
+	notifyClient := notify.NewClient()
+	if notifyClient == nil {
+		log.Printf("SENDGRID_API_KEY not set — password-reset emails are disabled")
+	}
+
+	api := &handlers.API{DB: pool, Supabase: supabaseClient, Notify: notifyClient}
 
 	r := chi.NewRouter()
 	r.Use(chimiddleware.Logger)
@@ -68,6 +74,15 @@ func main() {
 
 	r.Post("/api/auth/login", api.Login)
 	r.Post("/api/auth/logout", api.Logout)
+
+	// Self-service password reset — public/unauthenticated, same tier as
+	// login above. forgot-password is rate-limited tighter than login:
+	// each request can trigger a real outbound email to an address the
+	// caller chooses, not just a failed login attempt against their own,
+	// so it's worth capping harder against being used to mail-bomb someone
+	// else's inbox from this app (see Ralto's own identical reasoning).
+	r.With(middleware.RateLimit(6, time.Minute)).Post("/api/auth/forgot-password", api.RequestPasswordReset)
+	r.With(middleware.RateLimit(20, time.Minute)).Post("/api/auth/reset-password", api.ConfirmPasswordReset)
 
 	// Public fault-report form: reachable by freelancers with no Equiptra
 	// account, so it sits outside RequireAuth. OptionalAuth still injects

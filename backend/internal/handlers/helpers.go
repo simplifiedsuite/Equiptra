@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"equiptra/internal/notify"
 	"equiptra/internal/storage"
 )
 
@@ -18,6 +19,10 @@ type API struct {
 	// (SUPABASE_PROJECT_REF/SUPABASE_SERVICE_ROLE_KEY unset) — see
 	// storage.NewSupabaseClient.
 	Supabase *storage.SupabaseClient
+	// Notify is nil when SENDGRID_API_KEY is unset — password-reset emails
+	// are then disabled but the rest of the app still works, same
+	// feature-gating idiom as Supabase above. See internal/notify.NewClient.
+	Notify *notify.Client
 }
 
 // dbExecutor is satisfied by both *pgxpool.Pool and pgx.Tx — lets shared

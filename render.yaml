@@ -25,3 +25,13 @@ services:
         sync: false # the subdomain of https://{ref}.supabase.co
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false # server-side only — never sent to the frontend, never logged
+      # Self-service "Forgot password" — same SendGrid account/authenticated
+      # domain as the Ralto/Crewing repo (backend/render.yaml there); reuses
+      # no-reply@simplifiedsuite.io rather than repeating that domain's own
+      # sender-verification setup for a new subdomain.
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM_EMAIL
+        value: no-reply@simplifiedsuite.io
+      - key: SENDGRID_FROM_NAME
+        value: Equiptra

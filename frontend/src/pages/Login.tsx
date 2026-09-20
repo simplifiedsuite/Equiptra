@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth, ApiError } from '../context/AuthContext'
 
 export function Login() {
@@ -59,6 +59,11 @@ export function Login() {
               className="rounded-control border border-border px-3.5 py-2.5 text-[13.5px] outline-none focus:border-teal"
             />
           </label>
+          <div className="-mt-2 text-right">
+            <Link to="/forgot-password" className="text-[12.5px] font-medium text-teal">
+              Forgot password?
+            </Link>
+          </div>
 
           {error && (
             <div className="rounded-control border border-red-fill bg-red-fill px-3.5 py-2.5 text-[13px] font-medium text-red">
