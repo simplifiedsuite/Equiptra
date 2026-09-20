@@ -16,6 +16,7 @@ import { ServiceRecords } from './pages/ServiceRecords'
 import { ServiceRecordDetail } from './pages/ServiceRecordDetail'
 import { ReportFault } from './pages/ReportFault'
 import { Settings } from './pages/Settings'
+import { ContractDefaults } from './pages/ContractDefaults'
 import { ForcedPasswordChange } from './pages/ForcedPasswordChange'
 
 // Gates the entire authenticated shell — a must_change_password session
@@ -61,6 +62,7 @@ function AppRoutes() {
         <Route path="/services" element={<ServiceRecords />} />
         <Route path="/services/:id" element={<ServiceRecordDetail />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/contract-defaults" element={<ContractDefaults />} />
         <Route
           path="/users"
           element={

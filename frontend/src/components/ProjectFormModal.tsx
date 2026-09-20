@@ -167,8 +167,9 @@ function ClientMatchPanel({ fetchedName, onResolved }: { fetchedName: string; on
 
 // The optional "Link to a Contract?" step (Job Fetch-from-Monday, Stage B)
 // — always skippable, scoped to whichever Client the project resolves to.
-// Live from Core every time coreClientId changes.
-function ContractPicker({
+// Live from Core every time coreClientId changes. Exported — the Contract
+// defaults screen reuses this exact picker rather than rebuilding it.
+export function ContractPicker({
   coreClientId,
   value,
   onChange,

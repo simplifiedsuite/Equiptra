@@ -200,6 +200,31 @@ type BookingRequest struct {
 	TotalAllocationCount int `json:"total_allocation_count"`
 }
 
+// ContractDefault is a starting-point kit/equipment template for a Core
+// Contract, applied to a new Project's booking_requests when it's created
+// under that Contract. See migrations/0011_contract_defaults.sql.
+type ContractDefault struct {
+	ID                 int64     `json:"id"`
+	SharedContractID   string    `json:"shared_contract_id"`
+	SharedContractName string    `json:"shared_contract_name"`
+	ProductID          int64     `json:"product_id"`
+	Quantity           int       `json:"quantity"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	// Populated on joined list reads only.
+	ProductName *string `json:"product_name,omitempty"`
+	Category    *string `json:"category,omitempty"`
+}
+
+// ContractWithDefaults is one row of the "browse Contracts that already
+// have defaults set" list — lets a user find one without already knowing
+// its name.
+type ContractWithDefaults struct {
+	SharedContractID   string `json:"shared_contract_id"`
+	SharedContractName string `json:"shared_contract_name"`
+	DefaultCount       int    `json:"default_count"`
+}
+
 // BookingAllocation is the specific asset assigned once someone pulls a
 // physical unit for a booking_request, plus its checkout/check-in lifecycle.
 type BookingAllocation struct {

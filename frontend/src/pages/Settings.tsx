@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ChangePasswordForm } from '../components/ChangePasswordForm'
 
 export function Settings() {
@@ -21,6 +22,14 @@ export function Settings() {
         )}
 
         <ChangePasswordForm onSuccess={() => setJustChanged(true)} />
+      </div>
+
+      <div className="mt-5 max-w-[400px] rounded-card border border-border bg-surface p-6">
+        <h2 className="mb-1.5 text-[15px] font-bold">Contract defaults</h2>
+        <p className="mb-4 text-[13px] text-ink-soft">Starting-point kit templates applied to a new Project created under a Contract.</p>
+        <Link to="/contract-defaults" className="text-[13px] font-medium text-teal hover:opacity-80">
+          Manage Contract defaults →
+        </Link>
       </div>
     </div>
   )

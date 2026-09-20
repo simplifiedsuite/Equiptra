@@ -130,6 +130,28 @@ export interface CoreContract {
   date_end?: string
 }
 
+// A Contract's starting-point kit/equipment template, applied to a new
+// Project's booking_requests when it's created under that Contract.
+// product_name/category are populated on joined list reads only.
+export interface ContractDefault {
+  id: number
+  shared_contract_id: string
+  shared_contract_name: string
+  product_id: number
+  quantity: number
+  created_at: string
+  updated_at: string
+  product_name?: string
+  category?: string
+}
+
+// One row of the "browse Contracts that already have defaults set" list.
+export interface ContractWithDefaults {
+  shared_contract_id: string
+  shared_contract_name: string
+  default_count: number
+}
+
 // Core's own shared Vehicle entity — identity only (registration,
 // name/label). Fetched live (GET /core-vehicles) for the asset-edit
 // screen's "which vehicle is this?" picker when container_type = vehicle.

@@ -192,6 +192,16 @@ func main() {
 			r.Post("/{id}/allocations", api.CreateAllocation)
 		})
 
+		// Contract-level defaults — a starting-point kit/equipment template
+		// applied to a new Project's booking_requests. See
+		// internal/handlers/contract_defaults.go.
+		r.Route("/contract-defaults", func(r chi.Router) {
+			r.Get("/contracts", api.ListContractsWithDefaults)
+			r.Get("/", api.ListContractDefaults)
+			r.Post("/", api.UpsertContractDefault)
+			r.Delete("/{id}", api.DeleteContractDefault)
+		})
+
 		r.Route("/booking-allocations", func(r chi.Router) {
 			r.Delete("/{id}", api.DeleteAllocation)
 			r.Post("/{id}/checkout", api.CheckoutAllocation)

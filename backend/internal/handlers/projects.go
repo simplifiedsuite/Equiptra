@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -126,6 +127,16 @@ func (a *API) CreateProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "insert failed: "+err.Error())
 		return
 	}
+
+	// Contract defaults (Settings > Contract defaults) — a starting point
+	// only. Failure here never blocks the project itself; the booking
+	// requests can always be added manually.
+	if req.SharedContractID != nil {
+		if err := applyContractDefaults(r.Context(), a.DB, p.ID, *req.SharedContractID, req.StartDate, req.EndDate); err != nil {
+			log.Printf("apply contract defaults for project %d (contract %s): %v", p.ID, *req.SharedContractID, err)
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, p)
 }
 
