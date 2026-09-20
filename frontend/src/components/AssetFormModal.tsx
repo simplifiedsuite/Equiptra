@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../lib/api'
-import type { Asset, AssetStatus, ContainerType } from '../types'
+import type { Asset, AssetStatus, ContainerType, CoreVehicle } from '../types'
 import { CloseIcon } from './icons'
 
 function toDateInput(iso?: string) {
@@ -18,6 +18,7 @@ const CONTAINER_TYPE_OPTIONS: { value: ContainerType | ''; label: string }[] = [
   { value: '', label: 'Not a container' },
   { value: 'rack', label: 'Rack (fixed kit)' },
   { value: 'case', label: 'Case (packed per job)' },
+  { value: 'vehicle', label: 'Vehicle (fixed kit)' },
 ]
 
 export function AssetFormModal({
@@ -46,18 +47,35 @@ export function AssetFormModal({
   const [notes, setNotes] = useState(asset?.notes ?? '')
   const [containerType, setContainerType] = useState<ContainerType | ''>(asset?.container_type ?? '')
   const [homeRackId, setHomeRackId] = useState<number | ''>(asset?.home_rack_id ?? '')
+  const [coreVehicleId, setCoreVehicleId] = useState(asset?.core_vehicle_id ?? '')
   const [racks, setRacks] = useState<Asset[]>([])
+  const [coreVehicles, setCoreVehicles] = useState<CoreVehicle[]>([])
+  const [coreVehiclesError, setCoreVehiclesError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   // home_rack_id is edit-only metadata (see the addendum), so this list
-  // only matters in edit mode — and an asset can't be a member of a rack
-  // while also being a container itself, so the field is hidden whenever
-  // containerType is set.
+  // only matters in edit mode — and an asset can't be a member of a
+  // rack/vehicle while also being a container itself, so the field is
+  // hidden whenever containerType is set. Racks and vehicles are both
+  // valid "fixed to" targets — same home_rack_id mechanism either way.
   useEffect(() => {
     if (!isEdit || containerType) return
-    api.get<Asset[]>('/assets?container_type=rack&status=active').then(setRacks)
+    Promise.all([
+      api.get<Asset[]>('/assets?container_type=rack&status=active'),
+      api.get<Asset[]>('/assets?container_type=vehicle&status=active'),
+    ]).then(([racksList, vehiclesList]) => setRacks([...racksList, ...vehiclesList]))
   }, [isEdit, containerType])
+
+  // Live from Core, per the picker rule — the list of vehicles this asset
+  // could be, shown only while container_type = vehicle.
+  useEffect(() => {
+    if (containerType !== 'vehicle') return
+    api
+      .get<CoreVehicle[]>('/core-vehicles')
+      .then(setCoreVehicles)
+      .catch((err) => setCoreVehiclesError(err instanceof ApiError ? err.message : 'Could not load vehicles from Simplified Suite Core'))
+  }, [containerType])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -90,6 +108,7 @@ export function AssetFormModal({
         notes: notes.trim() || null,
         container_type: containerType || null,
         home_rack_id: containerType ? null : homeRackId || null,
+        core_vehicle_id: containerType === 'vehicle' ? coreVehicleId || null : null,
       }
       if (isEdit) {
         await api.put(`/assets/${asset.id}`, body)
@@ -201,13 +220,13 @@ export function AssetFormModal({
             </label>
             {isEdit && !containerType && (
               <label className="flex flex-1 flex-col gap-1.5 text-[13px] font-medium">
-                Home rack
+                Fixed to
                 <select
                   value={homeRackId}
                   onChange={(e) => setHomeRackId(e.target.value ? Number(e.target.value) : '')}
                   className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
                 >
-                  <option value="">Not part of a rack</option>
+                  <option value="">Not fixed to a rack or vehicle</option>
                   {racks
                     .filter((r) => r.id !== asset?.id)
                     .map((r) => (
@@ -219,6 +238,26 @@ export function AssetFormModal({
               </label>
             )}
           </div>
+
+          {containerType === 'vehicle' && (
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+              Which vehicle
+              <select
+                required
+                value={coreVehicleId}
+                onChange={(e) => setCoreVehicleId(e.target.value)}
+                className="rounded-control border border-border px-3.5 py-2.25 text-[13.5px] outline-none focus:border-teal"
+              >
+                <option value="">Select a vehicle…</option>
+                {coreVehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} — {v.registration}
+                  </option>
+                ))}
+              </select>
+              {coreVehiclesError && <span className="text-[11.5px] font-medium text-red">{coreVehiclesError}</span>}
+            </label>
+          )}
 
           <div className="flex gap-3">
             <label className="flex flex-1 flex-col gap-1.5 text-[13px] font-medium">

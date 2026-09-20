@@ -170,6 +170,11 @@ func main() {
 		r.Post("/core-clients", api.CreateCoreClient)
 		r.Get("/core-contracts", api.ListCoreContracts)
 
+		// Vehicle kit tracking (Stage 2 of the shared Vehicle addendum) —
+		// backs the asset-edit screen's Core Vehicle picker. See
+		// migrations/0010_vehicle_kit_tracking.sql.
+		r.Get("/core-vehicles", api.ListCoreVehicles)
+
 		// Shared Core Job entity — one Monday fetch, visible from every
 		// product. See Core's own migrations/0008_jobs.sql.
 		r.Get("/core-jobs", api.GetCoreJobByOrderNumber)

@@ -1,5 +1,5 @@
 export type AssetStatus = 'active' | 'written_off' | 'sold' | 'missing'
-export type ContainerType = 'rack' | 'case'
+export type ContainerType = 'rack' | 'case' | 'vehicle'
 export type ProjectStatus = 'tentative' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled'
 export type BookingRequestStatus = 'draft' | 'reserved' | 'partially_allocated' | 'out' | 'returned' | 'cancelled'
 export type BookingAllocationStatus = 'allocated' | 'checked_out' | 'returned'
@@ -40,6 +40,9 @@ export interface Asset {
   notes?: string
   container_type?: ContainerType
   home_rack_id?: number
+  // core_vehicle_id links this asset to Core's shared Vehicle entity when
+  // container_type is "vehicle" — see migrations/0010_vehicle_kit_tracking.sql.
+  core_vehicle_id?: string
   created_at: string
   updated_at: string
   product_name?: string
@@ -125,6 +128,15 @@ export interface CoreContract {
   name: string
   date_start?: string
   date_end?: string
+}
+
+// Core's own shared Vehicle entity — identity only (registration,
+// name/label). Fetched live (GET /core-vehicles) for the asset-edit
+// screen's "which vehicle is this?" picker when container_type = vehicle.
+export interface CoreVehicle {
+  id: string
+  name: string
+  registration: string
 }
 
 // Core's own shared Job entity — one Monday order-number fetch, visible

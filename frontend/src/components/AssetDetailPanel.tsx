@@ -10,6 +10,7 @@ import { CloseIcon, UploadIcon } from './icons'
 const containerTypeLabel: Record<NonNullable<Asset['container_type']>, string> = {
   rack: 'Rack',
   case: 'Case',
+  vehicle: 'Vehicle',
 }
 
 const statusLabel: Record<Asset['status'], string> = {
@@ -87,7 +88,7 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
   }, [asset.id])
 
   function reloadRackMembers() {
-    if (asset.container_type === 'rack') {
+    if (asset.container_type === 'rack' || asset.container_type === 'vehicle') {
       api.get<Asset[]>(`/assets/${asset.id}/rack-members`).then(setRackMembers)
     }
   }
@@ -175,21 +176,23 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
         />
         {asset.is_bulk && <Row label="Quantity held" value={String(asset.quantity)} />}
         {asset.container_type && <Row label="Container" value={containerTypeLabel[asset.container_type]} />}
-        {asset.home_rack_id && <Row label="Home rack" value={`Rack ${asset.home_rack_asset_number ?? asset.home_rack_id}`} />}
+        {asset.home_rack_id && <Row label="Fixed to" value={asset.home_rack_asset_number ?? String(asset.home_rack_id)} />}
         <Row label="Replacement value" value={asset.replacement_value != null ? `£${asset.replacement_value.toLocaleString()}` : '—'} />
         <Row label="Purchase price" value={asset.purchase_price != null ? `£${asset.purchase_price.toLocaleString()}` : '—'} />
         <Row label="Purchase date" value={formatDate(asset.purchase_date) || '—'} />
 
-        {asset.container_type === 'rack' && (
+        {(asset.container_type === 'rack' || asset.container_type === 'vehicle') && (
           <>
             <div className="mb-2.5 mt-5.5 flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-[.06em] text-ink-soft">Rack contents</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[.06em] text-ink-soft">
+                {containerTypeLabel[asset.container_type]} contents
+              </span>
               {user?.role === 'admin' && (
                 <button
                   onClick={() => setShowAddToRack((s) => !s)}
                   className="text-[11.5px] font-medium text-teal hover:opacity-80"
                 >
-                  {showAddToRack ? 'Close' : 'Add to rack'}
+                  {showAddToRack ? 'Close' : `Add to ${asset.container_type}`}
                 </button>
               )}
             </div>
@@ -219,7 +222,7 @@ export function AssetDetailPanel({ asset, onClose }: { asset: Asset; onClose: ()
                 </div>
               ))
             ) : (
-              <div className="border-b border-border py-2.5 text-[12.5px] text-ink-soft">No items currently in this rack</div>
+              <div className="border-b border-border py-2.5 text-[12.5px] text-ink-soft">No items currently in this {asset.container_type}</div>
             )}
             {rackError && <div className="border-b border-border py-2 text-[11.5px] font-medium text-red">{rackError}</div>}
           </>

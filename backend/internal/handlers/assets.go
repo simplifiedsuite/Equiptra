@@ -15,7 +15,7 @@ import (
 const assetSelectCols = `
 	a.id, a.legacy_id, a.product_id, a.asset_number, a.serial_number, a.is_bulk, a.quantity,
 	a.location, a.purchase_price, a.replacement_value, a.purchase_date, a.status, a.notes,
-	a.container_type, a.home_rack_id, a.created_at, a.updated_at, p.name, p.category, p.image_url,
+	a.container_type, a.home_rack_id, a.core_vehicle_id, a.created_at, a.updated_at, p.name, p.category, p.image_url,
 	EXISTS(SELECT 1 FROM service_records sr WHERE sr.asset_id = a.id AND sr.status IN ('open', 'in_progress')) AS has_open_fault,
 	hr.asset_number`
 
@@ -29,7 +29,7 @@ func scanAsset(row pgx.Row) (models.Asset, error) {
 	err := row.Scan(&asset.ID, &asset.LegacyID, &asset.ProductID, &asset.AssetNumber,
 		&asset.SerialNumber, &asset.IsBulk, &asset.Quantity, &asset.Location,
 		&asset.PurchasePrice, &asset.ReplacementValue, &asset.PurchaseDate, &asset.Status,
-		&asset.Notes, &asset.ContainerType, &asset.HomeRackID, &asset.CreatedAt, &asset.UpdatedAt,
+		&asset.Notes, &asset.ContainerType, &asset.HomeRackID, &asset.CoreVehicleID, &asset.CreatedAt, &asset.UpdatedAt,
 		&asset.ProductName, &asset.Category, &asset.ProductImageURL,
 		&asset.HasOpenFault, &asset.HomeRackAssetNumber)
 	return asset, err
@@ -114,7 +114,8 @@ type assetWriteRequest struct {
 	Notes            *string               `json:"notes"`
 	ContainerType    *models.ContainerType `json:"container_type"`
 	// HomeRackID is intentionally not read here — see CreateAsset/UpdateAsset.
-	HomeRackID *int64 `json:"home_rack_id"`
+	HomeRackID    *int64  `json:"home_rack_id"`
+	CoreVehicleID *string `json:"core_vehicle_id"`
 }
 
 func (a *API) CreateAsset(w http.ResponseWriter, r *http.Request) {
@@ -135,12 +136,12 @@ func (a *API) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	var id int64
 	err := a.DB.QueryRow(r.Context(), `
 		INSERT INTO assets (product_id, asset_number, serial_number, is_bulk, quantity,
-		                     location, purchase_price, replacement_value, purchase_date, status, notes, container_type)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		                     location, purchase_price, replacement_value, purchase_date, status, notes, container_type, core_vehicle_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id`,
 		req.ProductID, req.AssetNumber, req.SerialNumber, req.IsBulk, quantityOrDefault(req),
 		req.Location, req.PurchasePrice, req.ReplacementValue, req.PurchaseDate, statusOrDefault(req), req.Notes,
-		req.ContainerType,
+		req.ContainerType, req.CoreVehicleID,
 	).Scan(&id)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "insert failed: "+err.Error())
@@ -184,8 +185,8 @@ func (a *API) UpdateAsset(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "rack lookup failed")
 			return
 		}
-		if rackContainerType == nil || *rackContainerType != models.ContainerTypeRack {
-			writeError(w, http.StatusBadRequest, "home_rack_id must refer to an asset with container_type=rack")
+		if !isRackLikeContainer(rackContainerType) {
+			writeError(w, http.StatusBadRequest, "home_rack_id must refer to an asset with container_type=rack or container_type=vehicle")
 			return
 		}
 	}
@@ -193,11 +194,11 @@ func (a *API) UpdateAsset(w http.ResponseWriter, r *http.Request) {
 	tag, err := a.DB.Exec(r.Context(), `
 		UPDATE assets SET product_id=$1, asset_number=$2, serial_number=$3, is_bulk=$4, quantity=$5,
 		       location=$6, purchase_price=$7, replacement_value=$8, purchase_date=$9, status=$10,
-		       notes=$11, container_type=$12, home_rack_id=$13, updated_at=now()
-		WHERE id=$14`,
+		       notes=$11, container_type=$12, home_rack_id=$13, core_vehicle_id=$14, updated_at=now()
+		WHERE id=$15`,
 		req.ProductID, req.AssetNumber, req.SerialNumber, req.IsBulk, quantityOrDefault(req),
 		req.Location, req.PurchasePrice, req.ReplacementValue, req.PurchaseDate, statusOrDefault(req), req.Notes,
-		req.ContainerType, req.HomeRackID, id,
+		req.ContainerType, req.HomeRackID, req.CoreVehicleID, id,
 	)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "update failed: "+err.Error())

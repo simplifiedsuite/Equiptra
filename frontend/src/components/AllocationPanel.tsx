@@ -233,7 +233,7 @@ function ContainerContents({ allocation, onChanged }: { allocation: AllocationWi
   const [error, setError] = useState<string | null>(null)
 
   function reload() {
-    if (allocation.container_type === 'rack') {
+    if (allocation.container_type === 'rack' || allocation.container_type === 'vehicle') {
       api.get<Asset[]>(`/assets/${allocation.asset_id}/rack-members`).then(setRackMembers)
     } else {
       api.get<CaseContents[]>(`/booking-allocations/${allocation.id}/case-contents`).then(setCaseContents)
@@ -268,7 +268,7 @@ function ContainerContents({ allocation, onChanged }: { allocation: AllocationWi
     <div className="mt-2.5 rounded-control border border-border bg-off-white p-2.5">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-[11.5px] font-semibold uppercase tracking-[.04em] text-ink-soft">
-          {isCase ? 'Packed contents' : 'Rack contents'}
+          {isCase ? 'Packed contents' : allocation.container_type === 'vehicle' ? 'Vehicle contents' : 'Rack contents'}
         </span>
         {isCase && !isDone && !isCheckedOut && (
           <button onClick={() => setShowPack((s) => !s)} className="text-[11.5px] font-medium text-teal hover:opacity-80">
@@ -305,7 +305,7 @@ function ContainerContents({ allocation, onChanged }: { allocation: AllocationWi
       ) : rackMembers === null ? (
         <span className="text-[12px] text-ink-soft">Loading…</span>
       ) : rackMembers.length === 0 ? (
-        <span className="text-[12px] text-ink-soft">No items currently in this rack.</span>
+        <span className="text-[12px] text-ink-soft">No items currently in this {allocation.container_type === 'vehicle' ? 'vehicle' : 'rack'}.</span>
       ) : (
         <div className="flex flex-col gap-1">
           {rackMembers.map((m) => (

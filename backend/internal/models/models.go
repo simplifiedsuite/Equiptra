@@ -14,8 +14,9 @@ const (
 type ContainerType string
 
 const (
-	ContainerTypeRack ContainerType = "rack"
-	ContainerTypeCase ContainerType = "case"
+	ContainerTypeRack    ContainerType = "rack"
+	ContainerTypeCase    ContainerType = "case"
+	ContainerTypeVehicle ContainerType = "vehicle"
 )
 
 type ProjectStatus string
@@ -111,11 +112,15 @@ type Asset struct {
 	// ContainerType marks this asset as a rack or case; nil for an ordinary
 	// (non-container) asset. See docs/equiptra-racks-cases-addendum.md.
 	ContainerType *ContainerType `json:"container_type,omitempty"`
-	// HomeRackID is this asset's permanent rack membership, if any — set
-	// and cleared only via manual edit (admin-only), never at creation.
-	HomeRackID *int64    `json:"home_rack_id,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	// HomeRackID is this asset's permanent rack (or vehicle) membership, if
+	// any — set and cleared only via manual edit (admin-only), never at
+	// creation.
+	HomeRackID *int64 `json:"home_rack_id,omitempty"`
+	// CoreVehicleID links this asset to Core's shared Vehicle entity when
+	// ContainerType is "vehicle" — see migrations/0010_vehicle_kit_tracking.sql.
+	CoreVehicleID *string   `json:"core_vehicle_id,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 
 	// Populated on read (joined) endpoints only.
 	ProductName     *string `json:"product_name,omitempty"`

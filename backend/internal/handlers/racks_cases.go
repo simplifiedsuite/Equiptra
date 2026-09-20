@@ -15,6 +15,15 @@ import (
 	"equiptra/internal/models"
 )
 
+// isRackLikeContainer is true for both "rack" and "vehicle" — a vehicle's
+// permanently-fixed kit is structurally identical to a rack's (an asset's
+// home_rack_id pointing at the container), so every place that used to
+// check specifically for ContainerTypeRack goes through this instead,
+// rather than duplicating the rack mechanism for vehicles separately.
+func isRackLikeContainer(ct *models.ContainerType) bool {
+	return ct != nil && (*ct == models.ContainerTypeRack || *ct == models.ContainerTypeVehicle)
+}
+
 // cascadeContentItem is one asset that will get its own real booking_allocation
 // when a rack/case is checked out — see docs/equiptra-racks-cases-addendum.md.
 type cascadeContentItem struct {
@@ -58,7 +67,7 @@ type cascadePlan struct {
 func planContainerCascade(ctx context.Context, db dbExecutor, containerAssetID int64, containerType models.ContainerType, caseAllocationID int64, dateOut, dateIn time.Time) (*cascadePlan, error) {
 	var rows pgx.Rows
 	var err error
-	if containerType == models.ContainerTypeRack {
+	if isRackLikeContainer(&containerType) {
 		rows, err = db.Query(ctx, `
 			SELECT a.id, a.product_id, a.is_bulk, a.asset_number, a.status,
 			       EXISTS(SELECT 1 FROM service_records sr WHERE sr.asset_id = a.id AND sr.status IN ('open', 'in_progress'))
@@ -150,13 +159,13 @@ func applyContainerCascade(ctx context.Context, tx pgx.Tx, plan *cascadePlan, co
 		byProduct[item.ProductID] = append(byProduct[item.ProductID], item)
 	}
 
-	// Rack members travel out attached to their own rack, not pulled
-	// individually — return_to_home_rack is only meaningful for a solo pull,
-	// so it's forced false here regardless of the column's default. Case
-	// contents keep the default true: an item can live in a rack AND be
-	// packed into a case for this job, in which case it genuinely is being
-	// pulled from its rack.
-	returnToHomeRack := containerType != models.ContainerTypeRack
+	// Rack (and vehicle) members travel out attached to their own
+	// container, not pulled individually — return_to_home_rack is only
+	// meaningful for a solo pull, so it's forced false here regardless of
+	// the column's default. Case contents keep the default true: an item
+	// can live in a rack/vehicle AND be packed into a case for this job, in
+	// which case it genuinely is being pulled from its home.
+	returnToHomeRack := !isRackLikeContainer(&containerType)
 
 	for _, productID := range order {
 		items := byProduct[productID]
@@ -193,7 +202,7 @@ func applyContainerCascade(ctx context.Context, tx pgx.Tx, plan *cascadePlan, co
 func cascadeCheckin(ctx context.Context, tx pgx.Tx, containerAssetID int64, containerType models.ContainerType, caseAllocationID int64, checkedInBy int64) error {
 	var rows pgx.Rows
 	var err error
-	if containerType == models.ContainerTypeRack {
+	if isRackLikeContainer(&containerType) {
 		rows, err = tx.Query(ctx, `
 			SELECT ba.id FROM booking_allocations ba
 			JOIN assets a ON a.id = ba.asset_id
@@ -310,8 +319,8 @@ func (a *API) SwapRackMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return
 	}
-	if rackContainerType == nil || *rackContainerType != models.ContainerTypeRack {
-		writeError(w, http.StatusBadRequest, "asset is not a rack")
+	if !isRackLikeContainer(rackContainerType) {
+		writeError(w, http.StatusBadRequest, "asset is not a rack or vehicle")
 		return
 	}
 
@@ -378,8 +387,8 @@ func (a *API) AddRackMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return
 	}
-	if rackContainerType == nil || *rackContainerType != models.ContainerTypeRack {
-		writeError(w, http.StatusBadRequest, "asset is not a rack")
+	if !isRackLikeContainer(rackContainerType) {
+		writeError(w, http.StatusBadRequest, "asset is not a rack or vehicle")
 		return
 	}
 

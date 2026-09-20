@@ -96,6 +96,14 @@ func (a *API) ListCoreContracts(w http.ResponseWriter, r *http.Request) {
 	a.proxyToCore(w, r, "/api/contracts?client_id="+url.QueryEscape(clientID))
 }
 
+// ListCoreVehicles backs the asset-edit screen's "which vehicle is this?"
+// picker (shown when container_type = vehicle) — live per §5a's picker
+// rule, same pattern as ListCoreClients. Read-only: creating/editing a
+// Vehicle's identity happens in Core's own admin screen, not here.
+func (a *API) ListCoreVehicles(w http.ResponseWriter, r *http.Request) {
+	a.proxyToCore(w, r, "/api/vehicles")
+}
+
 // GetCoreJobByOrderNumber is the "check Core first" step of the shared Job
 // entity (see Core's own migrations/0008_jobs.sql): an order number is a
 // real, exact, unique identifier — unlike Client name, so this is a
