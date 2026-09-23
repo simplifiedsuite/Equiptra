@@ -62,6 +62,12 @@ Local Postgres setup, CSV migration tooling (`cmd/migrate`, `cmd/migrate-photos`
 - Tables must wrap in a scrollable `<div className="overflow-x-auto">` around the `<table>`, not rely on `overflow-hidden` on the outer card — the latter clips content instead of allowing horizontal scroll on mobile widths, which was a real bug found across every table-using page.
 - Destructive-action buttons that get disabled (delete guards, self-action guards) should carry both a `title` tooltip (desktop hover) and an always-visible inline text explanation — `title`-only tooltips don't work on touch devices.
 
+## Row-level security — every table, deny-all, no exceptions
+
+Every table in Supabase has RLS enabled with zero policies. That's deliberate, not a placeholder waiting for policies: nothing in Equiptra talks to Postgres through the Supabase client libraries or the anon key (only `internal/storage/supabase.go` uses a service-role key, for Storage's REST API, not Postgres), so the `anon`/`authenticated` roles never need table access, and RLS-with-no-policies denies them outright. The Go backend connects directly to Postgres as the table owner, and owners bypass RLS regardless of policies, so this costs the app nothing. Same convention as Crewing (this project's sibling app under the same Simplified Suite) — see its own CLAUDE.md.
+
+**Standing convention: every migration that `CREATE TABLE`s also `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`s it, in the same migration file.** A new table that ships without this line is exposed to the anon key by default — that's the gap to avoid, not a follow-up to schedule. Every table originally created in this project shipped without it (all ten were only caught later by Supabase's security advisor, including `users` and `password_reset_tokens` — the genuinely dangerous ones — and fixed retroactively directly against the live database; see `migrations/0012_backfill_rls.sql`, which records that in migration history too). Don't repeat that gap on the next new table.
+
 ## Known open items
 
 Documented in more detail in README's "Still open" section: carnet/delivery-note templates need sign-off against real historical documents, no Postgres backup/retention policy configured, and role-based permissions are intentionally wide open for products/assets pending real usage data.
